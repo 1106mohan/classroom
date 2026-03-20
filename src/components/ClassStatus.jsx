@@ -1,29 +1,136 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 const ClassStatus = () => {
-  // --- MOCK DATA (Replace with API calls) ---
-  // r.id, r.room, r.year, r.section, r.status
-  const [rooms, setRooms] = useState([
-    { id: 1, room: '101', year: '3rd Year', section: 'A', status: 'Available' },
-    { id: 2, room: '102', year: '2nd Year', section: 'B', status: 'Ongoing' },
-    { id: 3, room: '103', year: '1st Year', section: 'A', status: 'Available' },
-    { id: 4, room: '104', year: '3rd Year', section: 'C', status: 'Ongoing' },
-  ]);
-
-  // --- FORM STATE (For Adding New Class) ---
+  // --- STATE ---
+  const [rooms, setRooms] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   const [newRoom, setNewRoom] = useState({ room: '', year: '', section: '' });
 
-  // --- SEARCH STATE ---
-  const [searchQuery, setSearchQuery] = useState('');
+  // API URLs
+  const STATUS_API = "https://lh4rwbkmp2.execute-api.ap-south-1.amazonaws.com/class-status";
+  const ACTIVE_CLASSES_API = "https://lh4rwbkmp2.execute-api.ap-south-1.amazonaws.com/classes";
+
+  // --- FETCH DATA FUNCTION ---
+   // --- FETCH DATA FUNCTION ---
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      // URL for fetching today's history (Assuming you have this endpoint)
+      const HISTORY_API = "https://lh4rwbkmp2.execute-api.ap-south-1.amazonaws.com/history";
+
+      // 1. Fetch Static Room List
+      const statusRes = await fetch(STATUS_API);
+      const statusData = await statusRes.json();
+      
+      let savedRooms = [];
+      if (statusData.body) {
+        try { savedRooms = JSON.parse(statusData.body); } catch (e) { savedRooms = statusData; }
+      } else {
+        savedRooms = statusData;
+      }
+
+      if (!Array.isArray(savedRooms)) savedRooms = [];
+      
+      // 2. Fetch Active Classes (Current & Upcoming)
+      const activeRes = await fetch(ACTIVE_CLASSES_API);
+      const activeData = await activeRes.json();
+      let activeClasses = [];
+      if (activeData.body) {
+        try { activeClasses = JSON.parse(activeData.body); } catch (e) { activeClasses = activeData; }
+      } else { activeClasses = activeData; }
+      if (!Array.isArray(activeClasses)) activeClasses = [];
+
+      // 3. Fetch History (Classes that just finished today)
+      const histRes = await fetch(HISTORY_API);
+      const histData = await histRes.json();
+      let historyClasses = [];
+      if (histData.body) {
+        try { historyClasses = JSON.parse(histData.body); } catch (e) { historyClasses = histData; }
+      } else { historyClasses = histData; }
+      if (!Array.isArray(historyClasses)) historyClasses = [];
+
+      // Get Today's Date String to compare
+      const todayStr = new Date().toISOString().split("T")[0];
+      
+      // Create Maps
+      const activeMap = {};
+      activeClasses.forEach(cls => {
+        const key = String(cls.room).trim();
+        activeMap[key] = cls;
+      });
+
+      const historyMap = {};
+      historyClasses.forEach(cls => {
+        // Only care about history if it's today
+        if (cls.class_date === todayStr) {
+          const key = String(cls.room_number).trim();
+          // If multiple classes today, pick the most recent (or just store all)
+          // For simplicity, we just store the last one found for that room today
+          historyMap[key] = cls; 
+        }
+      });
+
+      // 4. Merge Data
+      const mergedRooms = savedRooms.map(room => {
+        const roomKey = String(room.room).trim();
+        const activeInfo = activeMap[roomKey];
+        const histInfo = historyMap[roomKey];
+
+        if (activeInfo) {
+          // CASE 1: Room is Active (Occupied or Upcoming)
+          return {
+            ...room,
+            status: activeInfo.status, 
+            subject: activeInfo.subject,
+            lecturer: activeInfo.lecturer,
+            time: `${activeInfo.start_time} - ${activeInfo.end_time}`
+          };
+        } else if (histInfo) {
+  return {
+    ...room,
+    status: 'Available',   // 👈 treat as available
+    subject: '-',          // 👈 clear data
+    lecturer: '-',
+    time: '-'
+  };
+} else {
+          // CASE 3: No Active, No History Today
+          return {
+            ...room,
+            status: 'Available',
+            subject: '-',
+            lecturer: '-',
+            time: '-'
+          };
+        }
+      });
+
+      setRooms(mergedRooms);
+
+    } catch (err) {
+      console.error("Error in fetchData:", err);
+      alert(`Failed to load class status: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [STATUS_API, ACTIVE_CLASSES_API, "https://lh4rwbkmp2.execute-api.ap-south-1.amazonaws.com/history"]);
+
+  // --- USE EFFECT ---
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   // --- STATS ---
   const totalRooms = rooms.length;
   const availableRooms = rooms.filter(r => r.status === 'Available').length;
-  const ongoingRooms = rooms.filter(r => r.status === 'Ongoing').length;
+  const occupiedRooms = rooms.filter(r => r.status === 'Occupied').length;
+  const upcomingRooms = rooms.filter(r => r.status === 'Upcoming').length;
 
   // --- HANDLERS ---
 
-  // Handle Input Change for Existing Rows (Edit)
   const handleRoomChange = (id, field, value) => {
     setRooms(prevRooms => 
       prevRooms.map(room => 
@@ -32,51 +139,76 @@ const ClassStatus = () => {
     );
   };
 
-  // Handle "Save" for existing rows
-  const handleSaveRow = (e, id) => {
-    e.preventDefault();
-    // In a real app, you would make an API call here.
-    console.log(`Saved room with ID: ${id}`);
-    alert('Room details updated successfully!');
-  };
+  // CHANGED: Removed 'e' (event) since we are not using a form anymore
+  const handleSaveRow = async (id) => {
+    const roomToUpdate = rooms.find(r => r.id === id);
+    
+    if (!roomToUpdate) return;
 
-  // Handle "Remove"
-  const handleRemove = (id) => {
-    if (window.confirm("Are you sure you want to remove this room?")) {
-      setRooms(prevRooms => prevRooms.filter(room => room.id !== id));
+    try {
+      const res = await fetch(STATUS_API, {
+        method: 'PUT',
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(roomToUpdate)
+      });
+
+      if (res.ok) {
+        alert('Room details updated!');
+        fetchData(); 
+      } else {
+        alert('Failed to update');
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  // Handle Add New Class Inputs
+  const handleRemove = async (id) => {
+    if (window.confirm("Are you sure you want to remove this room from the list?")) {
+      try {
+        const res = await fetch(`${STATUS_API}?id=${id}`, { method: 'DELETE' });
+        if (res.ok) fetchData(); 
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
   const handleNewRoomChange = (e) => {
     const { name, value } = e.target;
     setNewRoom(prev => ({ ...prev, [name]: value }));
   };
 
-  // Handle Submit Add New Class
-  const handleAddSubmit = (e) => {
+  const handleAddSubmit = async (e) => {
     e.preventDefault();
-    if (!newRoom.room || !newRoom.year || !newRoom.section) {
-      alert("Please fill in all fields");
+    if (!newRoom.room) {
+      alert("Room Number is required");
       return;
     }
 
-    const newEntry = {
-      id: Date.now(), // Simple ID generation
-      ...newRoom,
-      status: 'Available' // Default status
-    };
+    try {
+      const res = await fetch(STATUS_API, {
+        method: 'POST',
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newRoom)
+      });
 
-    setRooms(prev => [...prev, newEntry]);
-    setNewRoom({ room: '', year: '', section: '' }); // Reset form
+      if (res.ok) {
+        setNewRoom({ room: '', year: '', section: '' });
+        fetchData(); 
+      } else {
+        alert("Failed to add room");
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  // Filter rooms based on search
   const filteredRooms = rooms.filter(room => 
-    room.room.toLowerCase().includes(searchQuery.toLowerCase())
+    room.room && room.room.toString().toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // --- STYLES (Embedded) ---
+  // --- STYLES ---
   const styles = {
     body: {
       margin: 0,
@@ -171,11 +303,8 @@ const ClassStatus = () => {
       fontSize: '12px',
     },
     statusAvailable: { background: '#dcfce7', color: '#166534' },
-    statusOngoing: { 
-      background: '#fee2e2', 
-      color: '#991b1b',
-      animation: 'pulse 1.5s infinite' 
-    },
+    statusOngoing: { background: '#fee2e2', color: '#991b1b', animation: 'pulse 1.5s infinite' },
+    statusUpcoming: { background: '#fef9c3', color: '#854d0e' }, 
     searchInput: {
       width: '100%',
       padding: '10px',
@@ -184,7 +313,8 @@ const ClassStatus = () => {
       marginBottom: '15px',
       boxSizing: 'border-box',
     },
-    addFormH3: { marginTop: 0, color: '#1e3a8a' }
+    addFormH3: { marginTop: 0, color: '#1e3a8a' },
+    infoText: { fontSize: '11px', color: '#64748b', marginTop: '4px' }
   };
 
   return (
@@ -197,19 +327,16 @@ const ClassStatus = () => {
         }
         .stat-card:hover { transform: translateY(-5px); box-shadow: 0 20px 40px rgba(0,0,0,0.2); }
         tbody tr { transition: 0.25s; cursor: default; }
-        tbody tr:hover { background: #f1f5ff; transform: scale(1.01); }
+        tbody tr:hover { background: '#f1f5ff; transform: scale(1.01); }
         .btn:hover { opacity: 0.9; }
       `}</style>
 
-      {/* TOP BAR */}
       <div style={styles.topbar}>
         <h3 style={styles.topbarH3}>🏫 Class Status</h3>
         <a href="/dashboard" style={{...styles.btn, ...styles.save, textDecoration: 'none'}}>← Back</a>
       </div>
 
       <div style={styles.layout}>
-        
-        {/* SIDEBAR */}
         <div style={styles.sidebar}>
           <div style={styles.sidebarLink}>Dashboard</div>
           <div style={styles.sidebarLink}>Start / End Class</div>
@@ -218,28 +345,22 @@ const ClassStatus = () => {
           <div style={{...styles.sidebarLink, ...styles.sidebarLinkActive}}>Class Status</div>
         </div>
 
-        {/* MAIN CONTENT */}
         <div style={styles.content}>
-
-          {/* STATS */}
           <div style={styles.stats}>
             <div className="stat-card" style={styles.statCard}>
               <h2 style={styles.statCardH2}>{totalRooms}</h2>
               <p style={styles.statCardP}>Total Rooms</p>
             </div>
-
             <div className="stat-card" style={styles.statCard}>
               <h2 style={styles.statCardH2}>{availableRooms}</h2>
               <p style={styles.statCardP}>Available Rooms</p>
             </div>
-
             <div className="stat-card" style={styles.statCard}>
-              <h2 style={styles.statCardH2}>{ongoingRooms}</h2>
-              <p style={styles.statCardP}>Ongoing Classes</p>
+              <h2 style={styles.statCardH2}>{occupiedRooms + upcomingRooms}</h2>
+              <p style={styles.statCardP}>Busy / Upcoming</p>
             </div>
           </div>
 
-          {/* ROOM TABLE */}
           <div style={styles.card}>
             <input 
               type="text" 
@@ -252,17 +373,21 @@ const ClassStatus = () => {
             <table style={styles.table}>
               <thead>
                 <tr>
-                  <th style={styles.th}>Room Number</th>
+                  <th style={styles.th}>Room</th>
                   <th style={styles.th}>Year</th>
                   <th style={styles.th}>Section</th>
+                  <th style={styles.th}>Current Class Info</th>
                   <th style={styles.th}>Status</th>
                   <th style={styles.th}>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredRooms.map((room) => (
-                  <tr key={room.id}>
-                    <form onSubmit={(e) => handleSaveRow(e, room.id)}>
+                {loading ? (
+                   <tr><td colSpan="6" style={styles.td}>Loading...</td></tr>
+                ) : filteredRooms.length > 0 ? (
+                  filteredRooms.map((room) => (
+                    // REMOVED <form> tag here
+                    <tr key={room.id}>
                       <td style={styles.td}>
                         <input 
                           type="text" 
@@ -289,17 +414,41 @@ const ClassStatus = () => {
                           style={styles.input} 
                         />
                       </td>
-
+                      
                       <td style={styles.td}>
-                        {room.status === "Ongoing" ? (
-                          <span style={{...styles.status, ...styles.statusOngoing}}>Ongoing</span>
+                        {room.status === 'Available' ? (
+                          <span style={{color: '#94a3b8'}}>-</span>
                         ) : (
-                          <span style={{...styles.status, ...styles.statusAvailable}}>Available</span>
+                          <div>
+                            <div style={{fontWeight: 'bold'}}>{room.subject}</div>
+                            <div style={styles.infoText}>{room.lecturer}</div>
+                            <div style={styles.infoText}>{room.time}</div>
+                          </div>
                         )}
                       </td>
 
                       <td style={styles.td}>
-                        <button type="submit" className="btn save" style={styles.save}>Save</button>
+  {room.status === "Occupied" ? (
+    <span style={{...styles.status, ...styles.statusOngoing}}>Occupied</span>
+  ) : room.status === "Upcoming" ? (
+    <span style={{...styles.status, ...styles.statusUpcoming}}>Upcoming</span>
+  ) : room.status === "Just Finished" ? (
+    <span style={{...styles.status, background: '#e0f2fe', color: '#075985'}}>Available</span>
+  ) : (
+    <span style={{...styles.status, ...styles.statusAvailable}}>Available</span>
+  )}
+</td>
+
+                      <td style={styles.td}>
+                        {/* CHANGED: Moved onSubmit to onClick */}
+                        <button 
+                          type="button" 
+                          onClick={() => handleSaveRow(room.id)} 
+                          className="btn save" 
+                          style={styles.save}
+                        >
+                          Save
+                        </button>
                         <button 
                           type="button" 
                           onClick={() => handleRemove(room.id)} 
@@ -309,12 +458,11 @@ const ClassStatus = () => {
                           Remove
                         </button>
                       </td>
-                    </form>
-                  </tr>
-                ))}
-                {filteredRooms.length === 0 && (
+                    </tr>
+                  ))
+                ) : (
                   <tr>
-                    <td colSpan="5" style={styles.td}>No rooms found.</td>
+                    <td colSpan="6" style={styles.td}>No rooms found. Add a new room below.</td>
                   </tr>
                 )}
               </tbody>
@@ -323,7 +471,7 @@ const ClassStatus = () => {
 
           {/* ADD CLASS FORM */}
           <div style={{...styles.card, maxWidth: '400px'}}>
-            <h3 style={styles.addFormH3}>Add New Class</h3>
+            <h3 style={styles.addFormH3}>Add New Room</h3>
             <form onSubmit={handleAddSubmit}>
               <input 
                 type="text" 

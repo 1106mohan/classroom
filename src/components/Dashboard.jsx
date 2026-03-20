@@ -1,55 +1,89 @@
-import React, { useState } from 'react';
-// 1. ADD THIS IMPORT
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom'; 
 
 const Dashboard = ({ name = "Lecturer" }) => {
-  // 2. INITIALIZE NAVIGATE
   const navigate = useNavigate();
 
-  // --- MOCK DATA ---
-  const [classes, setClasses] = useState([
-    { room: '101', lecturer: 'Dr. Smith', subject: 'Data Structures', status: 'Occupied', free_at: '10:00 AM' },
-    { room: '102', lecturer: 'Prof. Johnson', subject: 'Algorithms', status: 'Occupied', free_at: '11:30 AM' },
-    { room: '103', lecturer: 'Ms. Davis', subject: 'Web Dev', status: 'Occupied', free_at: '09:45 AM' },
-    { room: '104', lecturer: 'Mr. Wilson', subject: 'Database', status: 'Free', free_at: 'Now' },
-  ]);
-
   // --- STATE ---
+  const [classes, setClasses] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [extendModal, setExtendModal] = useState({ open: false, room: null });
+  
+  // Modal state stores the ID of the class being extended
+  const [extendModal, setExtendModal] = useState({ open: false, id: null });
   const [extendInput, setExtendInput] = useState('');
 
-  // --- HANDLERS ---
-  
-  // Handle Search Logic
-  const handleSearchChange = (e) => {
-    setSearchQuery(e.target.value);
-  };
+  // --- API FUNCTIONS ---
+  const fetchClasses = async () => {
+    try {
+      const res = await fetch("https://lh4rwbkmp2.execute-api.ap-south-1.amazonaws.com/classes");
+      const result = await res.json();
 
-  // Modal Handlers
-  const openExtendModal = (room) => {
-    setExtendModal({ open: true, room });
-    setExtendInput('');
-  };
+      let data;
+      // Handle API Gateway Proxy response
+      if (result.body) {
+        data = JSON.parse(result.body);
+      } else {
+        data = result;
+      }
 
-  const closeExtendModal = () => {
-    setExtendModal({ open: false, room: null });
-    setExtendInput('');
-  };
+      console.log("Fetched Classes:", data); // Debug log
+      setClasses(Array.isArray(data) ? data : []);
 
-  const handleStopClass = (room) => {
-    const confirmStop = window.confirm(`Are you sure you want to stop the class in Room ${room}?`);
-    if (confirmStop) {
-      setClasses(prev => prev.map(c => 
-        c.room === room ? { ...c, status: 'Free', free_at: 'Now', lecturer: '-', subject: '-' } : c
-      ));
+    } catch (err) {
+      console.error("Error fetching classes:", err);
+      setClasses([]);
     }
   };
 
-  const handleExtendSubmit = (e) => {
+  // STOP CLASS FUNCTION (Uses ID)
+  const handleStopClass = async (id) => {
+    console.log("Attempting to STOP class with ID:", id); // DEBUG: Check Console
+
+    if (!id) {
+        alert("Error: Class ID is missing. Cannot stop class.");
+        return;
+    }
+
+    const confirmStop = window.confirm(`Are you sure you want to stop this class?`);
+    if (!confirmStop) return;
+
+    try {
+      const res = await fetch("https://lh4rwbkmp2.execute-api.ap-south-1.amazonaws.com/stop-class", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ id }) // Sending ID
+      });
+
+      const result = await res.json();
+      
+      let data;
+      if (result.body) {
+        data = JSON.parse(result.body);
+      } else {
+        data = result;
+      }
+
+      if (res.ok) {
+        alert("✅ Class stopped successfully");
+        fetchClasses(); 
+      } else {
+        console.error("Stop Error Response:", data);
+        alert(`❌ Error: ${data.error || data.message || 'Unknown error'}`);
+      }
+
+    } catch (err) {
+      console.error("Network Error stopping class:", err);
+      alert("❌ Network error stopping class");
+    }
+  };
+
+  // EXTEND CLASS FUNCTION (Uses ID)
+  const handleExtendSubmit = async (e) => {
     e.preventDefault();
+
     const input = extendInput.toLowerCase().trim();
-    
     if (!input) return;
 
     let minutes = 0;
@@ -68,20 +102,67 @@ const Dashboard = ({ name = "Lecturer" }) => {
       minutes = Math.round(value);
     }
 
-    if (isNaN(minutes) || minutes <= 0) {
-      alert("Invalid time value");
-      return;
-    }
+    console.log(`Attempting to EXTEND ID: ${extendModal.id} by ${minutes} minutes`); // DEBUG
 
-    console.log(`Extending room ${extendModal.room} by ${minutes} minutes.`);
-    alert(`Room ${extendModal.room} extended by ${minutes} minutes.`);
-    
-    closeExtendModal();
+    try {
+      const res = await fetch("https://lh4rwbkmp2.execute-api.ap-south-1.amazonaws.com/extend-class", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          id: extendModal.id, // Sending ID
+          minutes: minutes
+        })
+      });
+
+      const result = await res.json();
+
+      let data;
+      if (result.body) {
+        data = JSON.parse(result.body);
+      } else {
+        data = result;
+      }
+
+      if (res.ok) {
+        alert(`✅ Extended! New End Time: ${data.new_end_time}`);
+        fetchClasses();
+        closeExtendModal();
+      } else {
+        console.error("Extend Error:", data);
+        alert(`❌ Error extending: ${data.error || data.message}`);
+      }
+
+    } catch (err) {
+      console.error("EXTEND ERROR:", err);
+      alert("❌ Error extending class");
+    }
   };
 
-  // Filter classes based on search
+  // --- EFFECTS ---
+  useEffect(() => {
+    fetchClasses();
+  }, []);
+
+  // --- HANDLERS ---
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
+  };
+
+  const openExtendModal = (id) => {
+    console.log("Opening Extend Modal for ID:", id); // DEBUG
+    setExtendModal({ open: true, id });
+    setExtendInput('');
+  };
+
+  const closeExtendModal = () => {
+    setExtendModal({ open: false, id: null });
+    setExtendInput('');
+  };
+
   const filteredClasses = classes.filter(c => 
-    c.room.toString().toLowerCase().includes(searchQuery)
+    c.room && c.room.toString().toLowerCase().includes(searchQuery)
   );
 
   // --- STYLES ---
@@ -171,16 +252,27 @@ const Dashboard = ({ name = "Lecturer" }) => {
       color: '#475569',
     },
     status: {
-      background: '#fee2e2',
-      color: '#b91c1c',
       padding: '6px 14px',
       borderRadius: '20px',
       fontWeight: 'bold',
       fontSize: '12px',
+      display: 'inline-block',
+      // Default color (Red)
+      background: '#fee2e2', 
+      color: '#b91c1c',
     },
     statusFree: {
-      background: '#dcfce7',
+      background: '#dcfce7', // Green
       color: '#15803d',
+    },
+    statusOccupied: {
+      background: '#fee2e2', // Red
+      color: '#b91c1c',
+      animation: 'pulse 1.5s infinite' // Optional Pulse Animation
+    },
+    statusUpcoming: {
+      background: '#fef9c3', // Yellow
+      color: '#854d0e',
     },
     btn: {
       padding: '6px 14px',
@@ -247,15 +339,19 @@ const Dashboard = ({ name = "Lecturer" }) => {
   return (
     <div style={styles.body}>
       <style>{`
+        @keyframes pulse {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+          100% { transform: scale(1); }
+        }
         .sidebar-link:hover { background: #3b82f6; }
       `}</style>
 
       <div style={styles.topbar}>
         <h3>Welcome, {name}</h3>
-        {/* 3. UPDATE LOGOUT TO REDIRECT */}
         <div 
           onClick={() => {
-            localStorage.removeItem('accessToken'); // Clear session
+            localStorage.removeItem('accessToken'); 
             navigate('/'); 
           }} 
           style={styles.logout}
@@ -266,11 +362,9 @@ const Dashboard = ({ name = "Lecturer" }) => {
 
       <div style={styles.layout}>
         
-        {/* SIDEBAR WITH NAVIGATION */}
+        {/* SIDEBAR */}
         <div style={styles.sidebar}>
           <div style={{...styles.sidebarLink, ...styles.sidebarLinkActive}}>Dashboard</div>
-          
-          {/* 4. ADD ONCLICK TO NAVIGATE */}
           <div style={styles.sidebarLink} onClick={() => navigate('/start_end_class')}>Start / End Class</div>
           <div style={styles.sidebarLink} onClick={() => navigate('/timetable')}>Timetable</div>
           <div style={styles.sidebarLink} onClick={() => navigate('/history')}>Class History</div>
@@ -297,7 +391,9 @@ const Dashboard = ({ name = "Lecturer" }) => {
                   <th style={styles.th}>Lecturer</th>
                   <th style={styles.th}>Subject</th>
                   <th style={styles.th}>Status</th>
-                  <th style={styles.th}>Free At</th>
+                  <th style={styles.th}>Starts At</th>
+                  <th style={styles.th}>Ends At</th>
+                  <th style={styles.th}>Free At</th> 
                   <th style={styles.th}>Extend</th>
                   <th style={styles.th}>Action</th>
                 </tr>
@@ -305,22 +401,37 @@ const Dashboard = ({ name = "Lecturer" }) => {
               <tbody>
                 {filteredClasses.length > 0 ? (
                   filteredClasses.map((c, index) => (
-                    <tr key={index}>
+                    <tr key={c.id || index}> 
                       <td style={styles.td}>{c.room}</td>
                       <td style={styles.td}>{c.lecturer}</td>
                       <td style={styles.td}>{c.subject}</td>
                       <td style={styles.td}>
-                        <span style={{...styles.status, ...(c.status === 'Free' ? styles.statusFree : {})}}>
+                        <span 
+                          style={{
+                            ...styles.status, 
+                            ...(c.status === 'Free' && styles.statusFree),
+                            ...(c.status === 'Occupied' && styles.statusOccupied),
+                            ...(c.status === 'Upcoming' && styles.statusUpcoming)
+                          }}
+                        >
                           {c.status}
                         </span>
                       </td>
-                      <td style={styles.td}>{c.free_at}</td>
+                      
+                      <td style={styles.td}>{c.start_time}</td>
+                      <td style={styles.td}>{c.end_time}</td>
+
+                      <td style={styles.td}>
+                        {c.status === "Upcoming" && "-"}
+                        {c.status === "Occupied" && c.end_time}
+                        {c.status === "Free" && "Now"}
+                      </td>
 
                       <td style={styles.td}>
                         <button 
                           className="btn extend" 
                           style={styles.btn}
-                          onClick={() => openExtendModal(c.room)}
+                          onClick={() => openExtendModal(c.id)}
                           disabled={c.status === 'Free'} 
                         >
                           Extend
@@ -331,7 +442,7 @@ const Dashboard = ({ name = "Lecturer" }) => {
                         <span 
                           className="btn stop" 
                           style={{...styles.btn, ...styles.stop, opacity: c.status === 'Free' ? 0.5 : 1, cursor: c.status === 'Free' ? 'not-allowed' : 'pointer'}}
-                          onClick={() => c.status !== 'Free' && handleStopClass(c.room)}
+                          onClick={() => c.status !== 'Free' && handleStopClass(c.id)}
                         >
                           Stop
                         </span>
@@ -340,7 +451,7 @@ const Dashboard = ({ name = "Lecturer" }) => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="7" style={styles.td}>No rooms found.</td>
+                    <td colSpan="9" style={styles.td}>No rooms found.</td>
                   </tr>
                 )}
               </tbody>

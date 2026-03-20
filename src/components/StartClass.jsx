@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-const StartClass = ({ lecturerName = "Dr. Smith" }) => {
+const StartClass = () => { // Removed lecturerName prop
+  const navigate = useNavigate();
+
   // --- STATE ---
   const [formData, setFormData] = useState({
-    lecturer: lecturerName,
+    lecturer: '', // Now empty, user must type it
     room: '',
     subject: '',
     start_time: '',
     end_time: ''
   });
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- VALIDATION LOGIC ---
   const validateTime = (time) => {
@@ -19,7 +23,13 @@ const StartClass = ({ lecturerName = "Dr. Smith" }) => {
   };
 
   const validateForm = () => {
-    const { start_time, end_time } = formData;
+    const { start_time, end_time, room, subject, lecturer } = formData;
+
+    // Updated validation to check lecturer field too
+    if (!lecturer || !room || !subject) {
+      setError("Please fill in all fields (Lecturer, Room, Subject).");
+      return false;
+    }
 
     if (!validateTime(start_time)) {
       setError("Enter Start Time like 1 AM or 10:30 PM");
@@ -39,18 +49,44 @@ const StartClass = ({ lecturerName = "Dr. Smith" }) => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear error when user types
     if (error) setError('');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    
     if (validateForm()) {
-      // In a real app, send `formData` to your backend API here
-      console.log("Submitting Class Data:", formData);
-      alert("Class Started Successfully!");
-      // Reset form if needed
-      setFormData(prev => ({ ...prev, room: '', subject: '', start_time: '', end_time: '' }));
+      setIsSubmitting(true);
+      setError('');
+
+      try {
+        const res = await fetch("https://lh4rwbkmp2.execute-api.ap-south-1.amazonaws.com/start-class", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(formData)
+        });
+
+        const result = await res.json();
+
+        if (res.ok) {
+          alert("✅ Class Started Successfully!");
+          // Reset form
+          setFormData({ lecturer: '', room: '', subject: '', start_time: '', end_time: '' });
+          // Optional: Navigate back to dashboard
+          // navigate('/dashboard');
+        } else {
+          const errorMsg = result.body ? JSON.parse(result.body).error : result.error || result.message;
+          setError(`❌ Failed to start: ${errorMsg}`);
+        }
+
+      } catch (err) {
+        console.error("API Error:", err);
+        setError("❌ Network error. Please check your connection.");
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -108,9 +144,10 @@ const StartClass = ({ lecturerName = "Dr. Smith" }) => {
       borderRadius: '8px',
       border: '1px solid #c7d2fe',
       marginBottom: '18px',
-      boxSizing: 'border-box', // Ensure padding doesn't break width
+      boxSizing: 'border-box',
       fontSize: '14px',
     },
+    // We no longer need inputReadOnly style, but kept just in case
     inputReadOnly: {
       background: '#f1f5f9',
       cursor: 'not-allowed',
@@ -119,13 +156,13 @@ const StartClass = ({ lecturerName = "Dr. Smith" }) => {
     button: {
       width: '100%',
       padding: '12px',
-      background: '#22c55e',
+      background: isSubmitting ? '#86efac' : '#22c55e',
       border: 'none',
       borderRadius: '10px',
       color: 'white',
       fontSize: '16px',
       fontWeight: 'bold',
-      cursor: 'pointer',
+      cursor: isSubmitting ? 'not-allowed' : 'pointer',
       transition: 'background 0.2s',
     },
     errorMsg: {
@@ -142,7 +179,7 @@ const StartClass = ({ lecturerName = "Dr. Smith" }) => {
   return (
     <div style={styles.body}>
       <style>{`
-        .btn-hover:hover { background: #16a34a; }
+        .btn-hover:not(:disabled):hover { background: #16a34a; }
       `}</style>
 
       <a href="/dashboard" style={styles.backBtn}>← Back</a>
@@ -151,19 +188,20 @@ const StartClass = ({ lecturerName = "Dr. Smith" }) => {
         <div style={styles.card}>
           <h2 style={styles.h2}>Start Class</h2>
 
-          {/* Error Message (Replaces Flask Flash Messages) */}
           {error && <div style={styles.errorMsg}>{error}</div>}
 
           <form onSubmit={handleSubmit}>
             
-            {/* 🔒 READ ONLY (Lecturer Name) */}
+            {/* Lecturer Name - Now Editable */}
             <label style={styles.label}>Lecturer Name</label>
             <input 
-              style={{...styles.input, ...styles.inputReadOnly}}
+              style={styles.input} // Removed inputReadOnly style
               type="text"
               name="lecturer"
               value={formData.lecturer}
-              readOnly
+              onChange={handleChange}
+              placeholder="Enter Lecturer Name"
+              required 
             />
 
             <label style={styles.label}>Classroom Number</label>
@@ -210,7 +248,14 @@ const StartClass = ({ lecturerName = "Dr. Smith" }) => {
               required
             />
 
-            <button type="submit" className="btn-hover" style={styles.button}>Start Class</button>
+            <button 
+              type="submit" 
+              className="btn-hover" 
+              style={styles.button}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Starting..." : "Start Class"}
+            </button>
 
           </form>
         </div>

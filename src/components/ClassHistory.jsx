@@ -1,26 +1,52 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
 const ClassHistory = () => {
-  // --- MOCK DATA (Replace with API data in production) ---
-  const initialHistory = [
-    { id: 1, class_date: '2023-10-25', start_time: '09:00', end_time: '10:00', course_name: 'Data Structures', class_name: 'MCA-3-A', room_number: '101' },
-    { id: 2, class_date: '2023-10-25', start_time: '10:30', end_time: '11:30', course_name: 'Algorithms', class_name: 'MCA-3-B', room_number: '102' },
-    { id: 3, class_date: '2023-10-24', start_time: '14:00', end_time: '15:00', course_name: 'Web Dev', class_name: 'MCA-2-A', room_number: '103' },
-    { id: 4, class_date: new Date().toISOString().split("T")[0], start_time: '09:00', end_time: '10:00', course_name: 'Database', class_name: 'MCA-1-A', room_number: '104' }, // Example for "Today"
-  ];
-
   // --- STATE ---
-  const [history, setHistory] = useState(initialHistory);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState('');
+
+  // --- API FETCH ---
+  // Wrapped in useCallback so we can call it again after deletion
+  const fetchHistory = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("https://lh4rwbkmp2.execute-api.ap-south-1.amazonaws.com/history");
+      const result = await res.json();
+
+      let data;
+      // Handle Lambda Proxy response
+      if (result.body) {
+        data = JSON.parse(result.body);
+      } else {
+        data = result;
+      }
+
+      setHistory(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error fetching history:", err);
+      // Fallback to mock data if API fails
+      setHistory([
+        { id: 1, class_date: '2023-10-25', start_time: '09:00', end_time: '10:00', course_name: 'Data Structures', class_name: 'MCA-3-A', room_number: '101' },
+        { id: 2, class_date: '2023-10-25', start_time: '10:30', end_time: '11:30', course_name: 'Algorithms', class_name: 'MCA-3-B', room_number: '102' },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
   // --- DERIVED STATE (FILTERING) ---
   const filteredHistory = useMemo(() => {
     return history.filter(row => {
       const textMatch = 
-        row.course_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        row.class_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        row.room_number.toLowerCase().includes(searchQuery.toLowerCase());
+        (row.course_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (row.class_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (row.room_number || "").toLowerCase().includes(searchQuery.toLowerCase());
       
       const dateMatch = dateFilter ? row.class_date === dateFilter : true;
 
@@ -41,9 +67,27 @@ const ClassHistory = () => {
   }, [filteredHistory]);
 
   // --- HANDLERS ---
-  const handleDelete = (id) => {
-    if (window.confirm("Are you sure you want to delete this record?")) {
-      setHistory(prev => prev.filter(row => row.id !== id));
+  const handleDelete = async (id) => {
+    if (window.confirm("Are you sure you want to permanently delete this record?")) {
+      try {
+        // 1. Call the Delete API
+        // Ensure you have set up this endpoint in API Gateway pointing to your Delete Lambda
+        const res = await fetch(`https://lh4rwbkmp2.execute-api.ap-south-1.amazonaws.com/history-item?id=${id}`, {
+          method: 'DELETE'
+        });
+
+        if (res.ok) {
+          // 2. If successful, refresh the data from the server
+          alert("Record deleted successfully.");
+          fetchHistory(); 
+        } else {
+          alert("Failed to delete record.");
+        }
+
+      } catch (err) {
+        console.error("Delete error:", err);
+        alert("Error deleting record.");
+      }
     }
   };
 
@@ -150,6 +194,8 @@ const ClassHistory = () => {
       fontWeight: 'bold',
       display: 'inline-block',
       transition: 'background 0.2s',
+      cursor: 'pointer',
+      border: 'none',
     },
     noData: {
       textAlign: 'center',
@@ -218,7 +264,11 @@ const ClassHistory = () => {
           </tr>
         </thead>
         <tbody>
-          {filteredHistory.length > 0 ? (
+          {loading ? (
+             <tr>
+              <td colSpan="6" style={styles.noData}>Loading history...</td>
+            </tr>
+          ) : filteredHistory.length > 0 ? (
             filteredHistory.map((row) => (
               <tr key={row.id}>
                 <td className="date" style={styles.td}>{row.class_date}</td>
