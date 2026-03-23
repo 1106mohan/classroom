@@ -16,6 +16,23 @@ const Timetable = () => {
   // API URL
   const API_URL = "https://lh4rwbkmp2.execute-api.ap-south-1.amazonaws.com/timetable";
 
+  // ✅ SORT FUNCTION ADDED
+  const sortByDayOrder = (data) => {
+    const dayOrder = {
+      Monday: 1,
+      Tuesday: 2,
+      Wednesday: 3,
+      Thursday: 4,
+      Friday: 5,
+      Saturday: 6,
+      Sunday: 7
+    };
+
+    return data.sort((a, b) => {
+      return (dayOrder[a.day] || 99) - (dayOrder[b.day] || 99);
+    });
+  };
+
   // --- FETCH DATA ON LOAD ---
   useEffect(() => {
     fetchTimetable();
@@ -26,9 +43,10 @@ const Timetable = () => {
     try {
       const res = await fetch(API_URL);
       const data = await res.json();
-      // Handle Proxy Integration response
       const items = data.body ? JSON.parse(data.body) : data;
-      setTimetable(Array.isArray(items) ? items : []);
+
+      // ✅ APPLY SORT HERE
+      setTimetable(Array.isArray(items) ? sortByDayOrder(items) : []);
     } catch (err) {
       console.error("Error fetching timetable:", err);
     } finally {
@@ -38,7 +56,6 @@ const Timetable = () => {
 
   // --- HANDLERS ---
 
-  // 1. Handle Add New Entry
   const handleAddSubmit = async (e) => {
     e.preventDefault();
     
@@ -72,14 +89,12 @@ const Timetable = () => {
     setNewEntry(prev => ({ ...prev, [name]: value }));
   };
 
-  // 2. Handle Input Change (Local State)
   const handleRowInputChange = (id, field, value) => {
     setTimetable(timetable.map(row => 
       row.id === id ? { ...row, [field]: value } : row
     ));
   };
 
-  // 3. Handle Save (Update API)
   const handleRowSave = async (e, id) => {
     e.preventDefault();
     const rowToUpdate = timetable.find(r => r.id === id);
@@ -95,7 +110,7 @@ const Timetable = () => {
 
       if (res.ok) {
         alert('Row updated successfully!');
-        fetchTimetable(); // Refresh to ensure sync
+        fetchTimetable();
       } else {
         alert('Failed to update row');
       }
@@ -105,7 +120,6 @@ const Timetable = () => {
     }
   };
 
-  // 4. Handle Delete
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to remove this entry?")) {
       try {
@@ -125,7 +139,7 @@ const Timetable = () => {
     }
   };
 
-  // --- STYLES (Same as before) ---
+  // --- STYLES ---
   const styles = {
     body: {
       fontFamily: 'Arial, sans-serif',
@@ -243,15 +257,8 @@ const Timetable = () => {
 
       <div className="timetable-container" style={styles.timetableContainer}>
         
-        {/* ADD FORM */}
         <form className="add-form" style={styles.addForm} onSubmit={handleAddSubmit}>
-          <select 
-            name="day" 
-            value={newEntry.day} 
-            onChange={handleNewInputChange} 
-            style={styles.select}
-            required
-          >
+          <select name="day" value={newEntry.day} onChange={handleNewInputChange} style={styles.select} required>
             <option value="">Day</option>
             <option>Monday</option>
             <option>Tuesday</option>
@@ -261,50 +268,14 @@ const Timetable = () => {
             <option>Saturday</option>
           </select>
 
-          <input 
-            type="text" 
-            name="time" 
-            placeholder="08:00 - 09:00" 
-            value={newEntry.time}
-            onChange={handleNewInputChange}
-            style={{...styles.input, width: '140px'}} 
-            required 
-          />
-          
-          <input 
-            type="text" 
-            name="course" 
-            placeholder="Course Name" 
-            value={newEntry.course}
-            onChange={handleNewInputChange}
-            style={{...styles.input, width: '150px'}} 
-            required 
-          />
-          
-          <input 
-            type="text" 
-            name="class_name" 
-            placeholder="Class Name" 
-            value={newEntry.class_name}
-            onChange={handleNewInputChange}
-            style={{...styles.input, width: '120px'}} 
-            required 
-          />
-          
-          <input 
-            type="text" 
-            name="room" 
-            placeholder="Room No" 
-            value={newEntry.room}
-            onChange={handleNewInputChange}
-            style={{...styles.input, width: '80px'}} 
-            required 
-          />
+          <input type="text" name="time" placeholder="08:00 - 09:00" value={newEntry.time} onChange={handleNewInputChange} style={{...styles.input, width: '140px'}} required />
+          <input type="text" name="course" placeholder="Course Name" value={newEntry.course} onChange={handleNewInputChange} style={{...styles.input, width: '150px'}} required />
+          <input type="text" name="class_name" placeholder="Class Name" value={newEntry.class_name} onChange={handleNewInputChange} style={{...styles.input, width: '120px'}} required />
+          <input type="text" name="room" placeholder="Room No" value={newEntry.room} onChange={handleNewInputChange} style={{...styles.input, width: '80px'}} required />
 
           <button type="submit" className="btn-add" style={styles.btnAdd}>Add</button>
         </form>
 
-        {/* TIMETABLE TABLE */}
         <table style={styles.table}>
           <thead>
             <tr>
@@ -322,62 +293,26 @@ const Timetable = () => {
             ) : timetable.length > 0 ? (
               timetable.map((row) => (
                 <tr key={row.id}>
-  <td style={styles.td}>
-    <input 
-      value={row.day}
-      onChange={(e) => handleRowInputChange(row.id, 'day', e.target.value)}
-      style={styles.tableInput}
-    />
-  </td>
-
-  <td style={styles.td}>
-    <input 
-      value={row.time}
-      onChange={(e) => handleRowInputChange(row.id, 'time', e.target.value)}
-      style={styles.tableInput}
-    />
-  </td>
-
-  <td style={styles.td}>
-    <input 
-      value={row.course}
-      onChange={(e) => handleRowInputChange(row.id, 'course', e.target.value)}
-      style={styles.tableInput}
-    />
-  </td>
-
-  <td style={styles.td}>
-    <input 
-      value={row.class_name}
-      onChange={(e) => handleRowInputChange(row.id, 'class_name', e.target.value)}
-      style={styles.tableInput}
-    />
-  </td>
-
-  <td style={styles.td}>
-    <input 
-      value={row.room}
-      onChange={(e) => handleRowInputChange(row.id, 'room', e.target.value)}
-      style={styles.tableInput}
-    />
-  </td>
-
-  <td style={styles.td}>
-    <button 
-      onClick={(e) => handleRowSave(e, row.id)}
-      style={styles.saveBtn}
-    >
-      Save
-    </button>
-
-    <button 
-      onClick={() => handleDelete(row.id)}
-      style={styles.removeBtn}
-    >
-      Remove
-    </button>
-  </td>
-</tr>
+                  <td style={styles.td}>
+                    <input value={row.day} onChange={(e) => handleRowInputChange(row.id, 'day', e.target.value)} style={styles.tableInput}/>
+                  </td>
+                  <td style={styles.td}>
+                    <input value={row.time} onChange={(e) => handleRowInputChange(row.id, 'time', e.target.value)} style={styles.tableInput}/>
+                  </td>
+                  <td style={styles.td}>
+                    <input value={row.course} onChange={(e) => handleRowInputChange(row.id, 'course', e.target.value)} style={styles.tableInput}/>
+                  </td>
+                  <td style={styles.td}>
+                    <input value={row.class_name} onChange={(e) => handleRowInputChange(row.id, 'class_name', e.target.value)} style={styles.tableInput}/>
+                  </td>
+                  <td style={styles.td}>
+                    <input value={row.room} onChange={(e) => handleRowInputChange(row.id, 'room', e.target.value)} style={styles.tableInput}/>
+                  </td>
+                  <td style={styles.td}>
+                    <button onClick={(e) => handleRowSave(e, row.id)} style={styles.saveBtn}>Save</button>
+                    <button onClick={() => handleDelete(row.id)} style={styles.removeBtn}>Remove</button>
+                  </td>
+                </tr>
               ))
             ) : (
               <tr>
