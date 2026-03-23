@@ -177,7 +177,7 @@ const Home = () => {
         <div style={styles.heroContent}>
           {/* ✅ FIX: Use public path */}
           <img 
-            src="/images/Classroom Schedule.png"
+            src="/images/classroom-schedule.png"
             alt="System"
             style={styles.heroImage}
           />
