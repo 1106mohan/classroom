@@ -1,10 +1,5 @@
 import React from 'react';
 
-// 🔥 FIX: Import images from the root 'images' folder
-// We use '../' to go up from 'src/components' to the root, then into 'images'
-import bgImage from '../images/project.jpeg';
-import scheduleImage from '../images/Classroom Schedule.png'; 
-
 const Home = () => {
   const styles = {
     root: {
@@ -61,7 +56,7 @@ const Home = () => {
       background: 'transparent',
     },
 
-    /* HERO WITH BACKGROUND IMAGE */
+    /* HERO SECTION */
     hero: {
       position: 'relative',
       padding: '100px 80px',
@@ -72,8 +67,8 @@ const Home = () => {
       margin: '20px',
       overflow: 'hidden',
 
-      /* 🔥 UPDATED: Use the imported variable for the background */
-      backgroundImage: `url(${bgImage})`,
+      /* ✅ FIX: Use public folder path */
+      backgroundImage: `url('/images/project.jpeg')`,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
     },
@@ -180,9 +175,9 @@ const Home = () => {
         </div>
 
         <div style={styles.heroContent}>
-          {/* 🔥 UPDATED: Use the imported variable for the image tag */}
+          {/* ✅ FIX: Use public path */}
           <img 
-            src={scheduleImage}
+            src="/images/Classroom Schedule.png"
             alt="System"
             style={styles.heroImage}
           />
