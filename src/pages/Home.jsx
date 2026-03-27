@@ -56,7 +56,7 @@ const Home = () => {
       background: 'transparent',
     },
 
-    /* HERO SECTION */
+    /* HERO WITH BACKGROUND IMAGE */
     hero: {
       position: 'relative',
       padding: '100px 80px',
@@ -67,13 +67,13 @@ const Home = () => {
       margin: '20px',
       overflow: 'hidden',
 
-      /* ✅ FIX: Use public folder path */
+      /* 🔥 BACKGROUND IMAGE */
       backgroundImage: `url('/images/project.jpeg')`,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
     },
 
-    /* OVERLAY */
+    /* 🔥 OVERLAY */
     overlay: {
       position: 'absolute',
       top: 0,
@@ -113,11 +113,12 @@ const Home = () => {
     },
 
     heroImage: {
-      width: '100%',
-      borderRadius: '20px',
-      boxShadow: '0 20px 50px rgba(0,0,0,0.15)',
-      position: 'relative',
-      zIndex: 2,
+    width: '100%',
+    borderRadius: '20px',
+    boxShadow: '0 20px 50px rgba(0,0,0,0.15)',
+    position: 'relative',
+    zIndex: 2,
+    mixBlendMode: 'multiply',   // 🔥 removes white background effect
     },
 
     /* STRIP */
@@ -156,7 +157,7 @@ const Home = () => {
         </div>
       </nav>
 
-      {/* HERO SECTION */}
+      {/* HERO SECTION WITH BACKGROUND */}
       <section style={styles.hero}>
         <div style={styles.overlay}></div>
 
@@ -175,9 +176,8 @@ const Home = () => {
         </div>
 
         <div style={styles.heroContent}>
-          {/* ✅ FIX: Use public path */}
           <img 
-            src="/images/classroom-schedule.png"
+            src="/images/Classroom Schedule.png"
             alt="System"
             style={styles.heroImage}
           />
@@ -197,7 +197,7 @@ const Home = () => {
         </div>
 
         <div style={styles.stripBox}>
-          <h2 style={styles.stripH2}>BCA & MCA</h2>
+          <h2 style={styles.stripH2}>BCA,BBA,BCOM & MCA</h2>
           <p>Department Focused</p>
         </div>
       </section>
